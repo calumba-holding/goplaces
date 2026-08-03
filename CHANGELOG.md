@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.4.5 - Unreleased
+## 0.4.5 - 2026-08-02
 
 - Docs: rewrite the README around verified install, quick-start, and reference paths.
 - Release: accept interpolated Cask URLs and make completed release reruns idempotent.
+- Release: keep the pinned GitHub transport reusable across shell command substitutions.
 - Security: require Go 1.26.5 and scan both source and built binaries with pinned govulncheck.
 - CLI: report the tagged module version for `go install github.com/steipete/goplaces/cmd/goplaces@latest`; linked release versions still win and local builds remain `dev`.
 - Release: sign and notarize official macOS binaries with the OpenClaw Foundation Developer ID while keeping ordinary and cross-platform builds credential-free.

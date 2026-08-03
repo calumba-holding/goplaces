@@ -46,6 +46,20 @@ test_jq_freeze_survives_command_substitution() {
   rm -rf "$scratch"
 }
 
+test_gh_freeze_survives_command_substitution() {
+  (
+    source_release
+    unset GOPLACES_RELEASE_LOCAL_TESTING GOPLACES_RELEASE_LOCAL_SOURCE_ONLY
+    [[ "$(freeze_gh_transport; printf frozen)" == frozen ]] || exit 85
+    [[ -z "$gh_binary" ]] || exit 86
+    [[ -f "${git_isolation_root}/transport-bin/gh" && ! -L "${git_isolation_root}/transport-bin/gh" ]] || exit 87
+    [[ "$($STAT_BIN -f '%Lp' "${git_isolation_root}/transport-bin/gh")" == 500 ]] || exit 88
+    freeze_gh_transport
+    [[ "$gh_binary" == "${git_isolation_root}/transport-bin/gh" ]] || exit 89
+    freeze_gh_transport
+  )
+}
+
 test_identity() {
   /usr/bin/stat -f '%d:%i' "$1"
 }
@@ -3111,6 +3125,7 @@ main() {
   test_static_contract
   test_govulncheck_build_info_validation
   test_jq_freeze_survives_command_substitution
+  test_gh_freeze_survives_command_substitution
   test_run_shape
   test_workflow_record_uses_filename_lookup
   test_dispatch_response_binding
