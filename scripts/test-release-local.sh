@@ -214,6 +214,7 @@ EOF
   grep -Fq 'require_canonical_executable "$govulncheck_bin" "frozen govulncheck"' "$release_script" || die "installed govulncheck is not frozen before proof"
   grep -Fq 'readonly EXPECTED_GOVULNCHECK_MODULE_SUM="h1:jGVVuNZ7NrBJlFB7IBkZ/R9c8gYCja+SWqrHpBCYJZA="' "$release_script" || die "govulncheck reviewed module sum is not pinned"
   grep -Fq '"$go_bin" version -m "$govulncheck_bin"' "$release_script" || die "installed govulncheck build information is not inspected"
+  grep -Fq 'GOROOT="$producer_go_root" "$go_bin" version -m "$govulncheck_bin"' "$release_script" || die "govulncheck build inspection lost the pinned Go root"
   grep -Fq "\$'\\tmod\\tgolang.org/x/vuln\\tv1.5.0\\t'" "$release_script" || die "installed govulncheck module identity is not checked"
   grep -Fq '/bin/chmod -R u+w "$scratch"' "$release_script" || die "check-suite module cache is not made removable"
   grep -Fq '"${clean_env[@]}" "$govulncheck_bin" -db=https://vuln.go.dev -test ./...' "$release_script" || die "source vulnerability scan does not pin the official database URL"

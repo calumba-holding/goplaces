@@ -1902,7 +1902,7 @@ run_check_suite() {
   "${download_env[@]}" GOBIN="$audit_bin" "$go_bin" install golang.org/x/vuln/cmd/govulncheck@v1.5.0
   /bin/chmod 500 "$govulncheck_bin"
   require_canonical_executable "$govulncheck_bin" "frozen govulncheck"
-  govulncheck_build_info="$(/usr/bin/env -i PATH="$SECRET_SCOPE_SYSTEM_PATH" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC "$go_bin" version -m "$govulncheck_bin")" ||
+  govulncheck_build_info="$(/usr/bin/env -i PATH="$SECRET_SCOPE_SYSTEM_PATH" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC GOROOT="$producer_go_root" "$go_bin" version -m "$govulncheck_bin")" ||
     die "could not inspect frozen govulncheck build information"
   validate_govulncheck_build_info "$govulncheck_build_info" "$govulncheck_bin"
   actionlint_sha="$(pinned_sha256_file "$actionlint_bin")"
