@@ -1075,7 +1075,7 @@ test_trusted_ancestry_rejects_graph_overrides() {
 }
 
 test_post_manifest_source_recheck() {
-  local scratch repository home fixture_git_root tracked_sha raw_hidden raw_explicit wrapper producer_bin go_bin goreleaser_bin
+  local scratch repository home fixture_git_root tracked_sha raw_hidden raw_explicit wrapper producer_bin go_root go_bin goreleaser_bin
   local go_sha go_identity goreleaser_sha goreleaser_identity producer_path exec_log go_backup goreleaser_backup
   scratch="$(mktemp -d "${TMPDIR:-/tmp}/goplaces-source-recheck.XXXXXX")"
   scratch="$(cd "$scratch" && pwd -P)"
@@ -1084,12 +1084,13 @@ test_post_manifest_source_recheck() {
   fixture_git_root="${scratch}/fixture-git"
   wrapper="${repo_root}/scripts/recheck-release-source.sh"
   producer_bin="${scratch}/producer-bin"
+  go_root="${scratch}/go-root"
   go_bin="${producer_bin}/go"
   goreleaser_bin="${producer_bin}/goreleaser"
   exec_log="${scratch}/goreleaser-exec.log"
   go_backup="${scratch}/go.backup"
   goreleaser_backup="${scratch}/goreleaser.backup"
-  mkdir -p "$home" "$producer_bin" "$fixture_git_root"
+  mkdir -p "$home" "$producer_bin" "$go_root/bin" "$fixture_git_root"
   chmod 700 "$producer_bin"
   cat > "$go_bin" <<'EOF'
 #!/bin/bash -p
@@ -1113,6 +1114,7 @@ done
 [[ -z "${GORELEASER_EXEC_LOG:-}" ]] || printf 'release\n' >> "$GORELEASER_EXEC_LOG"
 EOF
   chmod +x "$go_bin" "$goreleaser_bin"
+  ln "$go_bin" "$go_root/bin/go"
   /bin/cp "$go_bin" "$go_backup"
   /bin/cp "$goreleaser_bin" "$goreleaser_backup"
   go_sha="$(test_sha256 "$go_bin")"
@@ -1130,7 +1132,7 @@ EOF
   test_fixture_git "$fixture_git_root" -C "$repository" checkout -q --detach "$tracked_sha"
   /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-    GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
+    GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
     "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
     "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null
 
@@ -1138,7 +1140,7 @@ EOF
   for release_control in GORELEASER_CURRENT_TAG GORELEASER_PREVIOUS_TAG GORELEASER_EXPERIMENTAL GORELEASER_FORCE_TOKEN; do
     if /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
       GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-      GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 \
+      GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 \
       GORELEASER_EXEC_LOG="$exec_log" "$release_control=hostile" \
       "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
       "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null 2>&1; then
@@ -1154,7 +1156,7 @@ EOF
   [[ "$raw_explicit" == '?? injected.go' ]] || die "exact status argv did not reveal the injected Go file"
   if /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-    GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
+    GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
     "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
     "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null 2>&1; then
     die "post-manifest recheck accepted hostile local status config"
@@ -1162,7 +1164,7 @@ EOF
   test_fixture_git "$fixture_git_root" -C "$repository" config --local --unset status.showUntrackedFiles
   if /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-    GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
+    GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
     "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
     "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null 2>&1; then
     die "post-manifest recheck accepted an injected untracked Go file"
@@ -1171,7 +1173,7 @@ EOF
   test_fixture_git "$fixture_git_root" -C "$repository" config --local gpg.ssh.program "${scratch}/fake-signature-program"
   if /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-    GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
+    GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
     "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
     "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null 2>&1; then
     die "post-manifest recheck accepted forbidden local Git config"
@@ -1180,7 +1182,7 @@ EOF
   printf '#!/bin/bash -p\nexit 99\n' > "$go_bin"
   if /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-    GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
+    GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
     "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
     "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null 2>&1; then
     die "post-manifest recheck accepted in-place Go mutation"
@@ -1190,7 +1192,7 @@ EOF
   /bin/mv -f "${scratch}/same-goreleaser" "$goreleaser_bin"
   if /usr/bin/env -i -C "$repository" PATH="$producer_path" HOME="$home" TMPDIR="$scratch" LC_ALL=C TZ=UTC \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_NO_REPLACE_OBJECTS=1 GIT_TERMINAL_PROMPT=0 \
-    GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
+    GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off GOPLACES_OFFICIAL_RELEASE=1 GOPLACES_PILOT_VERSION=9.9.9 GORELEASER_EXEC_LOG="$exec_log" \
     "$wrapper" pilot "$tracked_sha" v9.9.9 "$goreleaser_bin" "$goreleaser_sha" "$goreleaser_identity" \
     "$go_bin" "$go_sha" "$go_identity" -- release --snapshot --clean --skip=publish --config .goreleaser.yml >/dev/null 2>&1; then
     die "post-manifest recheck accepted same-byte GoReleaser replacement"
@@ -1230,6 +1232,7 @@ make_fake_producer_tools() {
   cat > "${directory}/go" <<EOF
 #!/bin/bash -p
 set -euo pipefail
+[[ "\${GOROOT:-}" == '$directory' ]] || exit 90
 [[ "\$*" == 'env GOVERSION' ]] || exit 91
 printf '%s\\n' '$go_version'
 EOF
@@ -1267,6 +1270,8 @@ shift
 exec /usr/bin/python3 -I "$@"
 EOF
   chmod +x "${directory}/go" "${directory}/goreleaser" "${directory}/node" "${directory}/expect" "${directory}/python3"
+  mkdir -p "${directory}/bin"
+  [[ -e "${directory}/bin/go" ]] || ln "${directory}/go" "${directory}/bin/go"
 }
 
 test_producer_gate_hardening() {
@@ -1333,8 +1338,10 @@ EOF
     export PATH
     prepare_producer_gate
     [[ "$producer_go" == "$git_isolation_root"/producer-bin.*/go ]] || die "Go was not frozen in the private producer directory"
+    [[ "$producer_go_root" == "$tools" ]] || die "Go root was not bound to the resolved tool directory"
     [[ "$producer_goreleaser" == "$git_isolation_root"/producer-bin.*/goreleaser ]] || die "GoReleaser was not frozen in the private producer directory"
     [[ "$(test_identity "$producer_go")" == "$(test_identity "${tools}/go")" ]] || die "frozen Go is not the resolved hard link"
+    [[ "$(test_identity "${producer_go_root}/bin/go")" == "$(test_identity "$producer_go")" ]] || die "Go root executable is not bound to the frozen Go inode"
     [[ "$(test_identity "$producer_goreleaser")" == "$(test_identity "${tools}/goreleaser")" ]] || die "frozen GoReleaser is not the resolved hard link"
     [[ "$(test_identity "$release_mac_app")" != "$(test_identity "$helper")" ]] || die "release-mac-app was not frozen as a private copy"
     [[ "$(test_sha256 "$release_mac_app")" == "$(test_sha256 "$helper")" ]] || die "frozen release-mac-app copy differs from its source"
@@ -1752,6 +1759,7 @@ write_fixture_producer_tools() {
   cat > "${root}/mock-bin/go" <<EOF
 #!/bin/bash -p
 set -euo pipefail
+[[ "\${GOROOT:-}" == '${root}/mock-bin' ]] || exit 89
 [[ "\$*" == 'env GOVERSION' ]] || { echo "unexpected go command: \$*" >&2; exit 90; }
 printf '%s\\n' '$go_version'
 EOF
@@ -1785,6 +1793,8 @@ shift
 exec /usr/bin/python3 -I "$@"
 EOF
   chmod +x "${root}/mock-bin/go" "${root}/mock-bin/goreleaser" "${root}/mock-bin/node" "${root}/mock-bin/expect" "${root}/mock-bin/python3"
+  mkdir -p "${root}/mock-bin/bin"
+  [[ -e "${root}/mock-bin/bin/go" ]] || ln "${root}/mock-bin/go" "${root}/mock-bin/bin/go"
 }
 
 run_fixture() {

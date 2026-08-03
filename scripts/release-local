@@ -111,6 +111,7 @@ release_manifest_identity=""
 producer_go=""
 producer_go_sha256=""
 producer_go_identity=""
+producer_go_root=""
 producer_goreleaser=""
 producer_goreleaser_sha256=""
 producer_goreleaser_identity=""
@@ -238,6 +239,9 @@ resolve_producer_tools() {
     [[ "$resolved_node" =~ ^(/opt/homebrew|/usr/local)/Cellar/node/26\.5\.0(_1)?/bin/node$ ]] || die "Node must resolve to the reviewed Homebrew 26.5.0 executable"
     [[ "$resolved_expect" =~ ^(/opt/homebrew|/usr/local)/Cellar/expect/5\.45\.4_3/bin/expect$ ]] || die "Expect must resolve to the canonical Homebrew 5.45.4_3 executable"
     [[ "$resolved_python" =~ ^(/opt/homebrew|/usr/local)/Cellar/python@3\.14/3\.14\.6/Frameworks/Python\.framework/Versions/3\.14/bin/python3\.14$ ]] || die "Python must resolve to the canonical Homebrew 3.14.6 executable"
+    producer_go_root="${resolved_go%/bin/go}"
+  else
+    producer_go_root="${resolved_go%/*}"
   fi
   producer_bin="$($MKTEMP_BIN -d "${git_isolation_root}/producer-bin.XXXXXX")"
   producer_bin="$(cd "$producer_bin" && pwd -P)"
@@ -257,9 +261,13 @@ resolve_producer_tools() {
   producer_python_target="$resolved_python"
   require_canonical_executable "$producer_go" "frozen Go"
   require_canonical_executable "$producer_goreleaser" "frozen GoReleaser"
+  [[ "$producer_go_root" == /* && -d "$producer_go_root" && ! -L "$producer_go_root" ]] || die "Go root is not a canonical directory"
+  [[ "$(cd "$producer_go_root" && pwd -P)" == "$producer_go_root" ]] || die "Go root is not canonical"
+  require_canonical_executable "${producer_go_root}/bin/go" "Go root executable"
   [[ "$(pinned_file_identity "$producer_go")" == "$(pinned_file_identity "$resolved_go")" ]] || die "frozen Go identity differs from the resolved executable"
+  [[ "$(pinned_file_identity "${producer_go_root}/bin/go")" == "$(pinned_file_identity "$producer_go")" ]] || die "Go root executable identity differs from the frozen executable"
   [[ "$(pinned_file_identity "$producer_goreleaser")" == "$(pinned_file_identity "$resolved_goreleaser")" ]] || die "frozen GoReleaser identity differs from the resolved executable"
-  go_version="$(/usr/bin/env -i PATH="$SECRET_SCOPE_SYSTEM_PATH" HOME="${git_isolation_root}/home" TMPDIR="${git_isolation_root}/tmp" LC_ALL=C TZ=UTC GOENV=off GOTOOLCHAIN=local "$producer_go" env GOVERSION)" ||
+  go_version="$(/usr/bin/env -i PATH="$SECRET_SCOPE_SYSTEM_PATH" HOME="${git_isolation_root}/home" TMPDIR="${git_isolation_root}/tmp" LC_ALL=C TZ=UTC GOROOT="$producer_go_root" GOENV=off GOTOOLCHAIN=local "$producer_go" env GOVERSION)" ||
     die "could not query native Go version"
   [[ "$go_version" == "$EXPECTED_GO_VERSION" ]] || die "requires native $EXPECTED_GO_VERSION, found $go_version"
   goreleaser_version "$producer_goreleaser"
@@ -363,6 +371,9 @@ recheck_producer_gate() {
   [[ "$expect_digest" == "$producer_expect_sha256" && "$(pinned_sha256_file "$producer_expect_target")" == "$producer_expect_target_sha256" ]] || die "Expect changed before secret entry"
   [[ "$python_digest" == "$producer_python_sha256" && "$(pinned_sha256_file "$producer_python_target")" == "$producer_python_target_sha256" ]] || die "Python changed before secret entry"
   require_canonical_executable "$producer_go" "Go"
+  [[ "$producer_go_root" == /* && -d "$producer_go_root" && ! -L "$producer_go_root" ]] || die "Go root changed before secret entry"
+  [[ "$(cd "$producer_go_root" && pwd -P)" == "$producer_go_root" ]] || die "Go root is not canonical before secret entry"
+  require_canonical_executable "${producer_go_root}/bin/go" "Go root executable"
   require_canonical_executable "$producer_goreleaser" "GoReleaser"
   require_canonical_executable "$producer_node" "Node launcher"
   require_canonical_executable "$producer_expect" "Expect launcher"
@@ -371,6 +382,7 @@ recheck_producer_gate() {
   require_canonical_executable "$producer_expect_target" "Expect target"
   require_canonical_executable "$producer_python_target" "Python target"
   [[ "$(pinned_file_identity "$producer_go")" == "$producer_go_identity" ]] || die "Go identity changed before secret entry"
+  [[ "$(pinned_sha256_file "${producer_go_root}/bin/go")" == "$producer_go_sha256" && "$(pinned_file_identity "${producer_go_root}/bin/go")" == "$producer_go_identity" ]] || die "Go root executable changed before secret entry"
   [[ "$(pinned_file_identity "$producer_goreleaser")" == "$producer_goreleaser_identity" ]] || die "GoReleaser identity changed before secret entry"
   [[ "$(pinned_file_identity "$producer_node")" == "$producer_node_identity" && "$(pinned_file_identity "$producer_node_target")" == "$producer_node_target_identity" ]] || die "Node identity changed before secret entry"
   [[ "$(pinned_file_identity "$producer_expect")" == "$producer_expect_identity" && "$(pinned_file_identity "$producer_expect_target")" == "$producer_expect_target_identity" ]] || die "Expect identity changed before secret entry"
@@ -944,7 +956,7 @@ assert_js_safe_positive_integer() {
 }
 
 preflight_repository() {
-  local origin_url repository_json branch_json branch_protected branch_sha branch current_sha tracking_sha status native_go_bin
+  local origin_url repository_json branch_json branch_protected branch_sha branch current_sha tracking_sha status native_go_bin native_go_root
 
   need git
   need go
@@ -989,7 +1001,14 @@ preflight_repository() {
 
   local native_go
   native_go_bin="${producer_go:-$(resolve_executable go)}"
-  native_go="$(/usr/bin/env -i PATH="$SECRET_SCOPE_SYSTEM_PATH" HOME="${git_isolation_root}/home" TMPDIR="${git_isolation_root}/tmp" LC_ALL=C TZ=UTC GOENV=off GOTOOLCHAIN=local "$native_go_bin" env GOVERSION)" || die "native Go toolchain is unavailable"
+  if [[ -n "$producer_go_root" ]]; then
+    native_go_root="$producer_go_root"
+  elif [[ "$native_go_bin" == */bin/go ]]; then
+    native_go_root="${native_go_bin%/bin/go}"
+  else
+    native_go_root="${native_go_bin%/*}"
+  fi
+  native_go="$(/usr/bin/env -i PATH="$SECRET_SCOPE_SYSTEM_PATH" HOME="${git_isolation_root}/home" TMPDIR="${git_isolation_root}/tmp" LC_ALL=C TZ=UTC GOROOT="$native_go_root" GOENV=off GOTOOLCHAIN=local "$native_go_bin" env GOVERSION)" || die "native Go toolchain is unavailable"
   [[ "$native_go" == "$EXPECTED_GO_VERSION" ]] || die "requires native $EXPECTED_GO_VERSION, found $native_go"
   require_regular_file "${protected_source_root}/go.mod"
   grep -Eq '^go 1\.26\.5$' "${protected_source_root}/go.mod" || die "protected go.mod must require Go 1.26.5"
@@ -1873,7 +1892,7 @@ run_check_suite() {
 
   local -a download_env=(
     /usr/bin/env -i PATH="$producer_path" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC
-    GOENV=off GOWORK=off GOFLAGS=-mod=readonly GOCACHE="${scratch}/gocache" GOMODCACHE="$go_mod_cache"
+    GOROOT="$producer_go_root" GOENV=off GOWORK=off GOFLAGS=-mod=readonly GOCACHE="${scratch}/gocache" GOMODCACHE="$go_mod_cache"
     GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOTOOLCHAIN=local GOVCS='*:off' GOTELEMETRY=off
   )
   (
@@ -1895,7 +1914,7 @@ run_check_suite() {
 
   local -a clean_env=(
     /usr/bin/env -i PATH="$producer_path" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC
-    GOENV=off GOWORK=off GOFLAGS=-mod=readonly GOCACHE="${scratch}/gocache" GOMODCACHE="$go_mod_cache"
+    GOROOT="$producer_go_root" GOENV=off GOWORK=off GOFLAGS=-mod=readonly GOCACHE="${scratch}/gocache" GOMODCACHE="$go_mod_cache"
     GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOVCS='*:off' GOTELEMETRY=off
   )
   [[ "$(pinned_sha256_file "$actionlint_bin")" == "$actionlint_sha" && "$(pinned_file_identity "$actionlint_bin")" == "$actionlint_identity" ]] || die "frozen actionlint changed before proof"
@@ -2123,6 +2142,7 @@ run_codesigned_goreleaser() {
       GIT_CONFIG_GLOBAL=/dev/null
       GIT_NO_REPLACE_OBJECTS=1
       GIT_TERMINAL_PROMPT=0
+      GOROOT="$producer_go_root"
       GOENV=off
       GOTOOLCHAIN=local
       GOWORK=off

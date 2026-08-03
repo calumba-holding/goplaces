@@ -96,6 +96,10 @@ recheck_executable() {
 
 recheck_executable "$goreleaser_bin" "$expected_goreleaser_sha" "$expected_goreleaser_identity" GoReleaser
 recheck_executable "$go_bin" "$expected_go_sha" "$expected_go_identity" Go
+go_root="${GOROOT:-}"
+[[ "$go_root" == /* && -d "$go_root" && ! -L "$go_root" ]] || die "Go root is not a canonical directory"
+[[ "$(cd "$go_root" && pwd -P)" == "$go_root" ]] || die "Go root is not canonical"
+recheck_executable "${go_root}/bin/go" "$expected_go_sha" "$expected_go_identity" "Go root executable"
 producer_bin="${go_bin%/*}"
 [[ "${goreleaser_bin%/*}" == "$producer_bin" && -d "$producer_bin" && ! -L "$producer_bin" ]] || die "producer executables are not in one private directory"
 [[ "$($realpath_bin "$producer_bin")" == "$producer_bin" ]] || die "producer executable directory is not canonical"
@@ -189,7 +193,7 @@ case "$mode" in
     ;;
 esac
 
-go_version="$(/usr/bin/env -i PATH="$system_path" HOME="${HOME:-/tmp}" TMPDIR="${TMPDIR:-/tmp}" LC_ALL=C TZ=UTC GOENV=off GOTOOLCHAIN=local "$go_bin" env GOVERSION)" ||
+go_version="$(/usr/bin/env -i PATH="$system_path" HOME="${HOME:-/tmp}" TMPDIR="${TMPDIR:-/tmp}" LC_ALL=C TZ=UTC GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local "$go_bin" env GOVERSION)" ||
   die "could not requery Go version"
 [[ "$go_version" == "$expected_go_version" ]] || die "Go version changed before execution"
 goreleaser_output="$(/usr/bin/env -i PATH="$system_path" HOME="${HOME:-/tmp}" TMPDIR="${TMPDIR:-/tmp}" LC_ALL=C TZ=UTC "$goreleaser_bin" --version 2>&1)" ||
@@ -202,4 +206,5 @@ recheck_executable "$goreleaser_bin" "$expected_goreleaser_sha" "$expected_gorel
 
 printf 'release source recheck: %s source accepted at %s\n' "$mode" "$expected_main"
 export PATH="${producer_bin}:${system_path}"
+export GOROOT="$go_root"
 exec "$goreleaser_bin" "${goreleaser_arguments[@]}"
