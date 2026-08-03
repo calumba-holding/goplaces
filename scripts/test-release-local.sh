@@ -2081,6 +2081,7 @@ test_reproducer_uses_frozen_module_cache() {
 #!/bin/bash -p
 set -euo pipefail
 fake_root="$(cd "$(dirname "$0")" && pwd -P)"
+[[ "${GOROOT:-}" == "$fake_root" ]] || exit 90
 [[ "${GOWORK:-}" == off ]] || exit 94
 printf '%s\n' "$*" >> "${fake_root}/go.log"
 case "$*" in
@@ -2100,7 +2101,9 @@ case "$*" in
 esac
 EOF
   chmod +x "$fake_go"
-  GO_BIN="$fake_go" GOMODCACHE="$cache" "${repo_root}/scripts/test-reproducible-builds.sh" >/dev/null
+  mkdir -p "${scratch}/bin"
+  ln "$fake_go" "${scratch}/bin/go"
+  GOROOT="$scratch" GO_BIN="$fake_go" GOMODCACHE="$cache" "${repo_root}/scripts/test-reproducible-builds.sh" >/dev/null
   ! grep -Fxq 'env GOMODCACHE' "$log" || die "reproducer discarded the frozen incoming module cache"
   [[ "$(grep -c '^build ' "$log")" == 12 ]] || die "reproducer did not build every target twice"
   hostile_env="${scratch}/hostile-bin"
@@ -2113,7 +2116,7 @@ exit 0
 EOF
   chmod +x "${hostile_env}/env"
   : > "$log"
-  PATH="${hostile_env}:$PATH" GO_BIN="$fake_go" GOMODCACHE="$cache" \
+  PATH="${hostile_env}:$PATH" GOROOT="$scratch" GO_BIN="$fake_go" GOMODCACHE="$cache" \
     "${repo_root}/scripts/test-reproducible-builds.sh" >/dev/null
   [[ ! -e "$sentinel" ]] || die "reproducer executed env from hostile PATH"
   [[ "$(grep -c '^build ' "$log")" == 12 ]] || die "pinned empty-environment command skipped reproduction"

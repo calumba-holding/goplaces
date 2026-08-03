@@ -18,7 +18,14 @@ case "$go_bin" in
   *) go_bin="$(cd "$(dirname "$go_bin")" && pwd -P)/$(basename "$go_bin")" ;;
 esac
 clean_path="$(dirname "$go_bin"):/usr/bin:/bin:/usr/sbin:/sbin"
-actual_go_version="$(/usr/bin/env -i PATH="$clean_path" HOME="$HOME" GOENV=off GOTOOLCHAIN=local GOWORK=off "$go_bin" env GOVERSION)"
+go_root="${GOROOT:-}"
+if [[ -z "$go_root" ]]; then
+  go_root="$("$go_bin" env GOROOT)" || die "could not resolve Go root"
+fi
+[[ "$go_root" == /* && -d "$go_root" && ! -L "$go_root" ]] || die "Go root must be an absolute, existing, non-symlink directory"
+[[ "$(cd "$go_root" && pwd -P)" == "$go_root" ]] || die "Go root must already be canonical"
+[[ -x "$go_root/bin/go" && ! -L "$go_root/bin/go" ]] || die "Go root executable is unavailable"
+actual_go_version="$(/usr/bin/env -i PATH="$clean_path" HOME="$HOME" GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off "$go_bin" env GOVERSION)"
 [[ "$actual_go_version" == "$expected_go_version" ]] || die "requires $expected_go_version, found $actual_go_version"
 if [[ -n "$snapshot_dir" ]]; then
   [[ -f "$snapshot_dir/metadata.json" && ! -L "$snapshot_dir/metadata.json" ]] || die "missing snapshot metadata: $snapshot_dir/metadata.json"
@@ -33,7 +40,7 @@ if [[ -n "${GOMODCACHE:-}" ]]; then
   module_cache="$(cd "$GOMODCACHE" && pwd -P)"
   [[ "$module_cache" == "$GOMODCACHE" ]] || die "GOMODCACHE must already be canonical"
 else
-  module_cache="$(/usr/bin/env -i PATH="$clean_path" HOME="$HOME" GOENV=off GOTOOLCHAIN=local GOWORK=off "$go_bin" env GOMODCACHE)"
+  module_cache="$(/usr/bin/env -i PATH="$clean_path" HOME="$HOME" GOROOT="$go_root" GOENV=off GOTOOLCHAIN=local GOWORK=off "$go_bin" env GOMODCACHE)"
 fi
 [[ -d "$module_cache" ]] || die "module cache is missing; run go mod download first"
 
@@ -57,6 +64,7 @@ build_once() {
     TMPDIR="$tmp" \
     LC_ALL=C \
     TZ=UTC \
+    GOROOT="$go_root" \
     GOENV=off \
     GOWORK=off \
     GOFLAGS=-mod=readonly \
