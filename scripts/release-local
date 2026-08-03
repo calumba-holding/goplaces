@@ -1850,7 +1850,7 @@ validate_govulncheck_build_info() {
 }
 
 run_check_suite() {
-  local scratch source go_bin go_mod_cache actionlint_bin shellcheck_bin govulncheck_bin goreleaser_bin producer_path audit_bin
+  local scratch source go_bin go_mod_cache actionlint_bin shellcheck_bin govulncheck_bin goreleaser_bin producer_path audit_path audit_bin
   local actionlint_source shellcheck_source actionlint_sha shellcheck_sha govulncheck_sha actionlint_identity shellcheck_identity govulncheck_identity
   local govulncheck_build_info
   if [[ "${GOPLACES_RELEASE_LOCAL_TESTING:-0}" == "1" && "${GOPLACES_RELEASE_LOCAL_SKIP_PROOFS:-0}" == "1" ]]; then
@@ -1871,6 +1871,8 @@ run_check_suite() {
   goreleaser_bin="$producer_goreleaser"
   go_bin="$producer_go"
   producer_path="${go_bin%/*}:${SECRET_SCOPE_SYSTEM_PATH}"
+  freeze_jq_parser
+  audit_path="${jq_binary%/*}:${producer_path}"
   audit_bin="$($MKTEMP_BIN -d "${git_isolation_root}/audit-bin.XXXXXX")"
   /bin/chmod 700 "$audit_bin"
   /bin/cp "$actionlint_source" "${audit_bin}/actionlint"
@@ -1891,7 +1893,7 @@ run_check_suite() {
   mkdir -p "${scratch}/home" "${scratch}/tmp" "${scratch}/gocache" "$go_mod_cache"
 
   local -a download_env=(
-    /usr/bin/env -i PATH="$producer_path" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC
+    /usr/bin/env -i PATH="$audit_path" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC
     GOROOT="$producer_go_root" GOENV=off GOWORK=off GOFLAGS=-mod=readonly GOCACHE="${scratch}/gocache" GOMODCACHE="$go_mod_cache"
     GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOTOOLCHAIN=local GOVCS='*:off' GOTELEMETRY=off
   )
@@ -1913,7 +1915,7 @@ run_check_suite() {
   govulncheck_identity="$(pinned_file_identity "$govulncheck_bin")"
 
   local -a clean_env=(
-    /usr/bin/env -i PATH="$producer_path" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC
+    /usr/bin/env -i PATH="$audit_path" HOME="${scratch}/home" TMPDIR="${scratch}/tmp" LC_ALL=C TZ=UTC
     GOROOT="$producer_go_root" GOENV=off GOWORK=off GOFLAGS=-mod=readonly GOCACHE="${scratch}/gocache" GOMODCACHE="$go_mod_cache"
     GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local GOVCS='*:off' GOTELEMETRY=off
   )
