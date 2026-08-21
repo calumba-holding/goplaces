@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { metadataText } from "./llms-metadata.mjs";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const docsDir = path.join(repoRoot, "docs");
 const cname = fs.readFileSync(path.join(docsDir, "CNAME"), "utf8").trim();
@@ -18,8 +20,11 @@ const pages = allHtml(docsDir)
     const html = fs.readFileSync(file, "utf8");
     return {
       rel,
-      title: textContent(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]) || titleize(path.basename(rel, ".html")),
-      description: attr(html.match(/<meta\s+name=["']description["']\s+content=["']([^"']*)["'][^>]*>/i)?.[1] || ""),
+      title: metadataText(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1], "title") || titleize(path.basename(rel, ".html")),
+      description: metadataText(
+        html.match(/<meta\s+name=["']description["']\s+content=["']([^"']*)["'][^>]*>/i)?.[1],
+        "description",
+      ),
     };
   })
   .filter(Boolean)
@@ -55,20 +60,6 @@ function allHtml(dir) {
 
 function pageUrl(rel) {
   return rel === "index.html" ? origin + "/" : origin + "/" + rel;
-}
-
-function textContent(value) {
-  return attr(value || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-}
-
-function attr(value) {
-  return String(value || "")
-    .replace(/&mdash;/g, "-")
-    .replace(/&amp;/g, "&")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .trim();
 }
 
 function titleize(input) {
