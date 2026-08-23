@@ -35,6 +35,13 @@ jobs:
           go test -race ./...
       - name: Vet
         run: go vet ./...
+      - name: Install reviewed GitHub CLI
+        # The contract suite resolves the real Homebrew gh, so the runner image's
+        # preinstalled version must match EXPECTED_GH_VERSION in release-local.
+        run: |
+          brew update
+          brew upgrade gh || brew install gh
+          /opt/homebrew/opt/gh/bin/gh --version
       - name: Release contract tests
         run: |
           ./scripts/test-codesign-macos.sh
@@ -49,7 +56,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
-          version: v2.16.0
+          version: v2.17.1
           args: release --snapshot --clean --skip=publish --config .goreleaser.yml
       - name: Snapshot binary vulnerability scan
         env:
